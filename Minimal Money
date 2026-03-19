@@ -1,486 +1,262 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { 
-  Home, 
-  ListOrdered, 
-  PlusCircle, 
-  Settings, 
-  Download, 
-  FileText, 
-  AlertCircle,
-  Trash2,
-  Plus,
-  Copy,
-  X,
-  CheckCircle2
-} from 'lucide-react';
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Minimal Money Tracker</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- React & ReactDOM (UMD) -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <!-- Babel for JSX -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;600&display=swap');
+        body { font-family: 'Prompt', sans-serif; -webkit-tap-highlight-color: transparent; }
+        .custom-scrollbar::-webkit-scrollbar { width: 0px; background: transparent; }
+        @media print {
+            body { background: white !important; }
+            .print\:hidden { display: none !important; }
+            .print\:block { display: block !important; }
+        }
+        input, select, button { font-size: 16px !important; }
+    </style>
+</head>
+<body class="bg-slate-50 flex justify-center">
+    <div id="root" class="w-full max-w-md min-h-screen bg-[#F8F9FA] flex flex-col relative shadow-xl print:shadow-none"></div>
 
-// ==========================================
-// 1. CONFIG & STYLES
-// ==========================================
+    <script type="text/babel">
+        const { useState, useEffect, useMemo } = React;
 
-const THEMES = {
-  blue: { id: 'blue', name: 'Soft Blue', primary: 'bg-blue-500', text: 'text-blue-500', border: 'border-blue-500', bgLight: 'bg-blue-50' },
-  green: { id: 'green', name: 'Matcha', primary: 'bg-emerald-500', text: 'text-emerald-500', border: 'border-emerald-500', bgLight: 'bg-emerald-50' },
-  peach: { id: 'peach', name: 'Peach', primary: 'bg-orange-400', text: 'text-orange-400', border: 'border-orange-400', bgLight: 'bg-orange-50' },
-  slate: { id: 'slate', name: 'Minimal', primary: 'bg-slate-700', text: 'text-slate-700', border: 'border-slate-700', bgLight: 'bg-slate-100' },
-};
+        // --- ICONS (SVG Version for reliability) ---
+        const Icons = {
+          Home: () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>,
+          List: () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"/></svg>,
+          Plus: () => <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/></svg>,
+          Settings: () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>,
+          Trash: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>,
+          X: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"/></svg>,
+          Alert: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>,
+          Copy: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2" ry="2" strokeWidth="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" strokeWidth="2"/></svg>,
+          Check: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"/></svg>
+        };
 
-const DEFAULT_CATEGORIES = {
-  income: ['เงินเดือน', 'รายได้เสริม', 'โบนัส', 'อื่นๆ'],
-  expense: ['อาหารและเครื่องดื่ม', 'การเดินทาง', 'ของใช้ส่วนตัว', 'บิลและค่าเช่า', 'ช้อปปิ้ง', 'อื่นๆ']
-};
+        // --- CONSTANTS ---
+        const THEMES = {
+          blue: { id: 'blue', primary: 'bg-blue-500', text: 'text-blue-500', border: 'border-blue-500' },
+          green: { id: 'green', primary: 'bg-emerald-500', text: 'text-emerald-500', border: 'border-emerald-500' },
+          peach: { id: 'peach', primary: 'bg-orange-400', text: 'text-orange-400', border: 'border-orange-400' },
+          slate: { id: 'slate', primary: 'bg-slate-700', text: 'text-slate-700', border: 'border-slate-700' },
+        };
 
-const EXPENSE_COLORS = ['#fb7185', '#f472b6', '#c084fc', '#818cf8', '#38bdf8', '#4ade80', '#facc15', '#fb923c'];
+        const DEFAULT_CAT = {
+          income: ['เงินเดือน', 'รายได้เสริม', 'โบนัส', 'อื่นๆ'],
+          expense: ['อาหารและเครื่องดื่ม', 'การเดินทาง', 'ของใช้ส่วนตัว', 'บิลและค่าเช่า', 'ช้อปปิ้ง', 'อื่นๆ']
+        };
 
-// ==========================================
-// 2. HELPER FUNCTIONS
-// ==========================================
+        const EXP_COLORS = ['#fb7185', '#f472b6', '#c084fc', '#818cf8', '#38bdf8', '#4ade80', '#facc15', '#fb923c'];
 
-const formatCurrency = (amount) => {
-  return new Intl.NumberFormat('th-TH', { style: 'currency', currency: 'THB' }).format(amount);
-};
+        // --- HELPERS ---
+        const formatCurrency = (amt) => new Intl.NumberFormat('th-TH', { style: 'currency', currency: 'THB' }).format(amt);
+        const formatDate = (ds) => new Date(ds).toLocaleDateString('th-TH', { year: 'numeric', month: 'short', day: 'numeric' });
+        const getMY = (ds) => new Date(ds).toISOString().substring(0, 7);
 
-const formatDate = (dateString) => {
-  const options = { year: 'numeric', month: 'short', day: 'numeric' };
-  return new Date(dateString).toLocaleDateString('th-TH', options);
-};
-
-const getMonthYear = (dateString) => {
-  const date = new Date(dateString);
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-};
-
-// ==========================================
-// 3. UI COMPONENTS
-// ==========================================
-
-const DonutChart = ({ data }) => {
-  if (data.length === 0) return <div className="text-center text-slate-400 py-4 text-sm">ไม่มีข้อมูลรายจ่ายในเดือนนี้</div>;
-  
-  let currentPercentage = 0;
-  const gradientStops = data.map((item, index) => {
-    const start = currentPercentage;
-    const end = currentPercentage + item.percentage;
-    currentPercentage = end;
-    return `${EXPENSE_COLORS[index % EXPENSE_COLORS.length]} ${start}% ${end}%`;
-  });
-
-  return (
-    <div className="flex items-center gap-4 mt-4">
-      <div 
-        className="w-24 h-24 rounded-full flex-shrink-0 relative"
-        style={{ background: `conic-gradient(${gradientStops.join(', ')})` }}
-      >
-        <div className="absolute inset-2 bg-white rounded-full"></div>
-      </div>
-      <div className="flex-1 space-y-2">
-        {data.slice(0, 4).map((item, idx) => (
-          <div key={item.category} className="flex items-center justify-between text-xs">
-            <div className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full" style={{ backgroundColor: EXPENSE_COLORS[idx % EXPENSE_COLORS.length] }}></span>
-              <span className="text-slate-600 truncate max-w-[80px]">{item.category}</span>
-            </div>
-            <span className="font-medium">{item.percentage.toFixed(0)}%</span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-};
-
-// ==========================================
-// 4. MAIN APPLICATION
-// ==========================================
-
-export default function App() {
-  const [activeTab, setActiveTab] = useState('dashboard');
-  const [transactions, setTransactions] = useState([]);
-  const [categories, setCategories] = useState(DEFAULT_CATEGORIES);
-  const [budget, setBudget] = useState(10000);
-  const [theme, setTheme] = useState(THEMES.blue);
-  const [filterMonth, setFilterMonth] = useState(getMonthYear(new Date()));
-
-  const [formData, setFormData] = useState({
-    type: 'expense',
-    amount: '',
-    category: '',
-    note: '',
-    date: new Date().toISOString().split('T')[0]
-  });
-
-  const [newCat, setNewCat] = useState({ type: 'expense', name: '' });
-  
-  // Custom Modal States แทนการใช้ alert/confirm ของระบบ
-  const [modalConfig, setModalConfig] = useState(null); // { type: 'csv' | 'confirm' | 'alert', title, content, onConfirm, copied }
-
-  useEffect(() => {
-    const savedTx = localStorage.getItem('min_tx');
-    const savedCat = localStorage.getItem('min_cat');
-    const savedBudget = localStorage.getItem('min_budget');
-    const savedTheme = localStorage.getItem('min_theme');
-
-    if (savedTx) setTransactions(JSON.parse(savedTx));
-    if (savedCat) setCategories(JSON.parse(savedCat));
-    if (savedBudget) setBudget(Number(savedBudget));
-    if (savedTheme && THEMES[savedTheme]) setTheme(THEMES[savedTheme]);
-  }, []);
-
-  useEffect(() => {
-    localStorage.setItem('min_tx', JSON.stringify(transactions));
-    localStorage.setItem('min_cat', JSON.stringify(categories));
-    localStorage.setItem('min_budget', budget.toString());
-    localStorage.setItem('min_theme', theme.id);
-  }, [transactions, categories, budget, theme]);
-
-  const filteredTx = useMemo(() => {
-    return transactions.filter(t => getMonthYear(t.date) === filterMonth).sort((a, b) => new Date(b.date) - new Date(a.date));
-  }, [transactions, filterMonth]);
-
-  const summary = useMemo(() => {
-    let income = 0, expense = 0;
-    const expByCategory = {};
-
-    filteredTx.forEach(t => {
-      if (t.type === 'income') income += t.amount;
-      else {
-        expense += t.amount;
-        expByCategory[t.category] = (expByCategory[t.category] || 0) + t.amount;
-      }
-    });
-
-    const pieData = Object.keys(expByCategory)
-      .map(cat => ({
-        category: cat,
-        amount: expByCategory[cat],
-        percentage: (expByCategory[cat] / expense) * 100
-      }))
-      .sort((a, b) => b.amount - a.amount);
-
-    return { income, expense, balance: income - expense, pieData };
-  }, [filteredTx]);
-
-  const handleAddTransaction = (e) => {
-    e.preventDefault();
-    if (!formData.amount || !formData.category) return;
-
-    const newTx = {
-      ...formData,
-      id: Date.now().toString(),
-      amount: Number(formData.amount)
-    };
-
-    setTransactions([newTx, ...transactions]);
-    setFormData({ ...formData, amount: '', note: '' });
-    setActiveTab('list');
-  };
-
-  const confirmDelete = (id) => {
-    setModalConfig({
-      type: 'confirm',
-      title: 'ยืนยันการลบ',
-      content: 'คุณแน่ใจหรือไม่ว่าต้องการลบรายการนี้? (ไม่สามารถกู้คืนได้)',
-      onConfirm: () => {
-        setTransactions(transactions.filter(t => t.id !== id));
-        setModalConfig(null);
-      }
-    });
-  };
-
-  const handleAddCategory = () => {
-    if (!newCat.name.trim()) return;
-    if (!categories[newCat.type].includes(newCat.name.trim())) {
-      setCategories(prev => ({
-        ...prev,
-        [newCat.type]: [...prev[newCat.type], newCat.name.trim()]
-      }));
-    }
-    setNewCat({ ...newCat, name: '' });
-  };
-
-  // แก้ไขระบบ Export สำหรับหน้าต่างจำลอง (Preview)
-  const exportCSV = () => {
-    const headers = ['Date,Type,Category,Amount,Note'];
-    const rows = filteredTx.map(t => `${t.date},${t.type === 'income'?'รายรับ':'รายจ่าย'},${t.category},${t.amount},${t.note || '-'}`);
-    const csvContent = headers.concat(rows).join("\n");
-    
-    // แสดง Modal สำหรับคัดลอกแทนการโหลดไฟล์ตรงๆ เนื่องจากติดข้อจำกัด iFrame
-    setModalConfig({
-      type: 'csv',
-      title: 'ส่งออกไฟล์ CSV',
-      content: csvContent,
-      copied: false
-    });
-  };
-
-  const handleCopyCSV = () => {
-    if(!modalConfig) return;
-    const textArea = document.createElement("textarea");
-    textArea.value = modalConfig.content;
-    document.body.appendChild(textArea);
-    textArea.select();
-    try {
-      document.execCommand('copy');
-      setModalConfig(prev => ({ ...prev, copied: true }));
-      setTimeout(() => setModalConfig(prev => prev ? { ...prev, copied: false } : null), 2000);
-    } catch (err) {
-      console.error('Copy failed', err);
-    }
-    document.body.removeChild(textArea);
-  };
-
-  const handlePrintPDF = () => {
-    try {
-      window.print();
-    } catch(e) {
-      // หากถูก Block โดย Browser
-      setModalConfig({
-        type: 'alert',
-        title: 'การพิมพ์ถูกระงับ',
-        content: 'เบราว์เซอร์ของคุณระงับการสั่งพิมพ์อัตโนมัติ กรุณากดปุ่มลัด Ctrl+P (หรือเมนู Share -> Print ในมือถือ) เพื่อเซฟเป็น PDF นะครับ'
-      });
-    }
-  };
-
-  // --- RENDERS ---
-
-  const renderModal = () => {
-    if (!modalConfig) return null;
-
-    return (
-      <div className="fixed inset-0 bg-slate-900/50 z-50 flex items-center justify-center p-4 print:hidden animate-in fade-in duration-200">
-        <div className="bg-white rounded-2xl p-5 w-full max-w-sm shadow-xl animate-in zoom-in-95 duration-200">
-          
-          <div className="flex justify-between items-center mb-4">
-            <h3 className="text-lg font-bold text-slate-800">{modalConfig.title}</h3>
-            <button onClick={() => setModalConfig(null)} className="text-slate-400 hover:text-slate-600">
-              <X size={20} />
-            </button>
-          </div>
-
-          {modalConfig.type === 'confirm' && (
-            <div>
-              <p className="text-slate-600 text-sm mb-6">{modalConfig.content}</p>
-              <div className="flex gap-3">
-                <button onClick={() => setModalConfig(null)} className="flex-1 py-2 rounded-lg bg-slate-100 text-slate-600 font-medium hover:bg-slate-200">
-                  ยกเลิก
-                </button>
-                <button onClick={modalConfig.onConfirm} className="flex-1 py-2 rounded-lg bg-rose-500 text-white font-medium hover:bg-rose-600">
-                  ลบข้อมูล
-                </button>
+        // --- COMPONENTS ---
+        const DonutChart = ({ data }) => {
+          if (data.length === 0) return <div className="text-center text-slate-400 py-4 text-xs">ไม่มีข้อมูลรายจ่าย</div>;
+          let curr = 0;
+          const stops = data.map((it, i) => {
+            const s = curr; const e = curr + it.percentage; curr = e;
+            return `${EXP_COLORS[i % EXP_COLORS.length]} ${s}% ${e}%`;
+          });
+          return (
+            <div className="flex items-center gap-4 mt-2">
+              <div className="w-20 h-20 rounded-full flex-shrink-0 relative" style={{ background: `conic-gradient(${stops.join(', ')})` }}>
+                <div className="absolute inset-2 bg-white rounded-full"></div>
+              </div>
+              <div className="flex-1 space-y-1">
+                {data.slice(0, 3).map((it, i) => (
+                  <div key={it.category} className="flex justify-between text-[10px]">
+                    <div className="flex items-center gap-1 truncate max-w-[80px]">
+                      <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: EXP_COLORS[i % EXP_COLORS.length] }}></span>
+                      <span className="truncate">{it.category}</span>
+                    </div>
+                    <span>{it.percentage.toFixed(0)}%</span>
+                  </div>
+                ))}
               </div>
             </div>
-          )}
+          );
+        };
 
-          {modalConfig.type === 'alert' && (
-            <div>
-              <p className="text-slate-600 text-sm mb-6">{modalConfig.content}</p>
-              <button onClick={() => setModalConfig(null)} className={`w-full py-2 rounded-lg text-white font-medium ${theme.primary}`}>
-                ตกลง
-              </button>
-            </div>
-          )}
+        // --- MAIN APP ---
+        function App() {
+          const [tab, setTab] = useState('dashboard');
+          const [tx, setTx] = useState(() => JSON.parse(localStorage.getItem('min_tx') || '[]'));
+          const [cats, setCats] = useState(() => JSON.parse(localStorage.getItem('min_cat') || JSON.stringify(DEFAULT_CAT)));
+          const [budget, setBudget] = useState(() => Number(localStorage.getItem('min_budget') || '10000'));
+          const [theme, setTheme] = useState(() => THEMES[localStorage.getItem('min_theme') || 'blue']);
+          const [month, setMonth] = useState(getMY(new Date()));
+          const [modal, setModal] = useState(null);
+          const [form, setForm] = useState({ type: 'expense', amount: '', category: '', note: '', date: new Date().toISOString().split('T')[0] });
+          const [newCat, setNewCat] = useState({ type: 'expense', name: '' });
 
-          {modalConfig.type === 'csv' && (
-            <div>
-              <p className="text-xs text-slate-500 mb-3">กดคัดลอกข้อมูลด้านล่างไปวางใน Excel (วางแบบคั่นด้วยลูกน้ำ)</p>
-              <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 h-32 overflow-y-auto mb-4 text-xs font-mono text-slate-600 whitespace-pre">
-                {modalConfig.content}
-              </div>
-              <button 
-                onClick={handleCopyCSV} 
-                className={`w-full py-3 rounded-lg text-white font-medium flex items-center justify-center gap-2 transition-all ${modalConfig.copied ? 'bg-emerald-500' : theme.primary}`}
-              >
-                {modalConfig.copied ? <CheckCircle2 size={18} /> : <Copy size={18} />}
-                {modalConfig.copied ? 'คัดลอกเรียบร้อยแล้ว!' : 'คัดลอกข้อมูล CSV'}
-              </button>
-            </div>
-          )}
+          useEffect(() => {
+            localStorage.setItem('min_tx', JSON.stringify(tx));
+            localStorage.setItem('min_cat', JSON.stringify(cats));
+            localStorage.setItem('min_budget', budget.toString());
+            localStorage.setItem('min_theme', theme.id);
+          }, [tx, cats, budget, theme]);
 
-        </div>
-      </div>
-    );
-  };
+          const filtered = useMemo(() => tx.filter(t => t.date.startsWith(month)).sort((a, b) => new Date(b.date) - new Date(a.date)), [tx, month]);
+          const summary = useMemo(() => {
+            let inc = 0, exp = 0; const byCat = {};
+            filtered.forEach(t => {
+              if (t.type === 'income') inc += t.amount;
+              else { exp += t.amount; byCat[t.category] = (byCat[t.category] || 0) + t.amount; }
+            });
+            const pie = Object.keys(byCat).map(c => ({ category: c, amount: byCat[c], percentage: (byCat[c]/exp)*100 })).sort((a,b)=>b.amount-a.amount);
+            return { inc, exp, bal: inc - exp, pie };
+          }, [filtered]);
 
-  const renderDashboard = () => {
-    const isOverBudget = summary.expense > budget;
-    const isWarning = summary.expense > (budget * 0.8) && !isOverBudget;
+          const handleAdd = (e) => {
+            e.preventDefault(); if(!form.amount || !form.category) return;
+            setTx([{...form, amount: Number(form.amount), id: Date.now()}, ...tx]);
+            setForm({...form, amount: '', note: ''}); setTab('list');
+          };
 
-    return (
-      <div className="space-y-4 animate-in fade-in duration-300">
-        <div className="flex justify-between items-center mb-2">
-          <h2 className="text-lg font-bold text-slate-800">สรุปประจำเดือน</h2>
-          <input 
-            type="month" 
-            value={filterMonth}
-            onChange={(e) => setFilterMonth(e.target.value)}
-            className="text-sm bg-white border border-slate-200 rounded-lg px-2 py-1 outline-none text-slate-600"
-          />
-        </div>
+          const exportCSV = () => {
+            const head = 'Date,Type,Category,Amount,Note\n';
+            const rows = filtered.map(t => `${t.date},${t.type},${t.category},${t.amount},${t.note || '-'}`).join('\n');
+            setModal({ title: 'ส่งออก CSV', type: 'csv', content: head + rows });
+          };
 
-        <div className={`${theme.primary} rounded-2xl p-5 text-white shadow-md relative overflow-hidden`}>
-          <div className="absolute -right-6 -top-6 w-24 h-24 bg-white opacity-10 rounded-full"></div>
-          <p className="text-sm opacity-90 mb-1">ยอดเงินคงเหลือ</p>
-          <h1 className="text-3xl font-bold tracking-tight">{formatCurrency(summary.balance)}</h1>
-        </div>
+          return (
+            <div className="flex flex-col h-screen">
+              {/* Header */}
+              <header className={`${theme.primary} p-5 pt-8 text-white flex justify-between items-center shadow-lg print:hidden`}>
+                <h1 className="text-xl font-bold tracking-tight">Minimal Money</h1>
+                <input type="month" value={month} onChange={e => setMonth(e.target.value)} className="bg-white/20 border-none rounded-lg px-2 py-1 text-sm outline-none"/>
+              </header>
 
-        <div className="grid grid-cols-2 gap-3">
-          <div className="bg-white rounded-xl p-4 shadow-sm border border-slate-100 flex flex-col items-center justify-center">
-            <span className="text-xs text-slate-500 mb-1">รายรับ</span>
-            <span className="text-emerald-500 font-semibold">{formatCurrency(summary.income)}</span>
-          </div>
-          <div className="bg-white rounded-xl p-4 shadow-sm border border-slate-100 flex flex-col items-center justify-center">
-            <span className="text-xs text-slate-500 mb-1">รายจ่าย</span>
-            <span className="text-rose-500 font-semibold">{formatCurrency(summary.expense)}</span>
-          </div>
-        </div>
+              {/* Main Content */}
+              <main className="flex-1 overflow-y-auto p-4 custom-scrollbar pb-24">
+                {tab === 'dashboard' && (
+                  <div className="space-y-4 animate-in fade-in duration-500">
+                    <div className={`${theme.primary} rounded-2xl p-6 text-white shadow-xl relative overflow-hidden`}>
+                       <p className="text-xs opacity-80 mb-1">คงเหลือ</p>
+                       <h2 className="text-3xl font-bold">{formatCurrency(summary.bal)}</h2>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="bg-white p-4 rounded-xl border text-center shadow-sm">
+                        <p className="text-[10px] text-slate-400 font-bold">รายรับ</p>
+                        <p className="text-emerald-500 font-bold">{formatCurrency(summary.inc)}</p>
+                      </div>
+                      <div className="bg-white p-4 rounded-xl border text-center shadow-sm">
+                        <p className="text-[10px] text-slate-400 font-bold">รายจ่าย</p>
+                        <p className="text-rose-500 font-bold">{formatCurrency(summary.exp)}</p>
+                      </div>
+                    </div>
+                    <div className="bg-white p-4 rounded-xl border shadow-sm">
+                      <div className="flex justify-between text-[10px] font-bold text-slate-400 mb-2"><span>งบประมาณ</span><span>{formatCurrency(summary.exp)} / {formatCurrency(budget)}</span></div>
+                      <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+                        <div className={`h-full ${summary.exp > budget ? 'bg-rose-500' : theme.primary}`} style={{width: `${Math.min((summary.exp/budget)*100, 100)}%`}}></div>
+                      </div>
+                    </div>
+                    <div className="bg-white p-4 rounded-xl border shadow-sm">
+                      <h4 className="text-[10px] font-bold text-slate-400 mb-2">สัดส่วนรายจ่าย</h4>
+                      <DonutChart data={summary.pie} />
+                    </div>
+                  </div>
+                )}
 
-        <div className={`rounded-xl p-4 border ${isOverBudget ? 'bg-rose-50 border-rose-200' : isWarning ? 'bg-orange-50 border-orange-200' : 'bg-white border-slate-100 shadow-sm'}`}>
-          <div className="flex justify-between text-sm mb-2">
-            <span className="text-slate-600 font-medium">งบประมาณรายจ่าย</span>
-            <span className="text-slate-500">{formatCurrency(summary.expense)} / {formatCurrency(budget)}</span>
-          </div>
-          <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
-            <div 
-              className={`h-full rounded-full transition-all ${isOverBudget ? 'bg-rose-500' : isWarning ? 'bg-orange-400' : theme.primary}`}
-              style={{ width: `${Math.min((summary.expense / budget) * 100, 100)}%` }}
-            ></div>
-          </div>
-          {(isWarning || isOverBudget) && (
-            <div className={`mt-2 flex items-center gap-1 text-xs ${isOverBudget ? 'text-rose-600' : 'text-orange-600'}`}>
-              <AlertCircle size={14} />
-              <span>{isOverBudget ? 'คุณใช้เงินเกินงบประมาณที่ตั้งไว้แล้ว!' : 'ระวัง! คุณใช้เงินไปแล้วกว่า 80% ของงบ'}</span>
-            </div>
-          )}
-        </div>
+                {tab === 'list' && (
+                  <div className="space-y-3 animate-in fade-in duration-300">
+                    {filtered.length === 0 ? <p className="text-center py-10 text-slate-300 text-sm">ไม่มีข้อมูลในเดือนนี้</p> : filtered.map(t => (
+                      <div key={t.id} className="bg-white p-3 rounded-xl border flex justify-between items-center shadow-sm">
+                        <div className="flex items-center gap-3">
+                          <div className={`w-10 h-10 rounded-full flex items-center justify-center ${t.type === 'income' ? 'bg-emerald-50 text-emerald-500' : 'bg-rose-50 text-rose-500'}`}>
+                            {t.type === 'income' ? '+' : '-'}
+                          </div>
+                          <div>
+                            <p className="font-bold text-slate-700 text-sm">{t.category}</p>
+                            <p className="text-[10px] text-slate-400">{t.date} {t.note && `• ${t.note}`}</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <span className={`font-bold text-sm ${t.type === 'income' ? 'text-emerald-500' : 'text-slate-700'}`}>{formatCurrency(t.amount)}</span>
+                          <button onClick={() => setTx(tx.filter(x => x.id !== t.id))} className="text-slate-200 hover:text-rose-400"><Icons.Trash/></button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
 
-        <div className="bg-white rounded-xl p-4 shadow-sm border border-slate-100">
-          <h3 className="text-sm font-semibold text-slate-700 border-b pb-2 mb-2">สัดส่วนรายจ่าย</h3>
-          <DonutChart data={summary.pieData} />
-        </div>
-      </div>
-    );
-  };
+                {tab === 'add' && (
+                  <form onSubmit={handleAdd} className="bg-white p-6 rounded-2xl border shadow-xl space-y-4 animate-in zoom-in-95 duration-200">
+                    <div className="flex bg-slate-100 p-1 rounded-lg">
+                       {['expense', 'income'].map(tp => <button key={tp} type="button" onClick={()=>setForm({...form, type: tp, category: ''})} className={`flex-1 py-2 text-xs rounded-md ${form.type === tp ? 'bg-white shadow font-bold text-slate-800' : 'text-slate-400'}`}>{tp === 'expense' ? 'รายจ่าย' : 'รายรับ'}</button>)}
+                    </div>
+                    <input type="number" step="0.01" required placeholder="0.00" value={form.amount} onChange={e=>setForm({...form, amount: e.target.value})} className="w-full text-4xl font-bold text-center py-4 border-none outline-none focus:ring-0"/>
+                    <div className="grid grid-cols-2 gap-2">
+                       {cats[form.type].map(c => <button key={c} type="button" onClick={()=>setForm({...form, category: c})} className={`p-3 text-[10px] rounded-lg border truncate ${form.category === c ? `${theme.primary} text-white` : 'bg-white text-slate-500'}`}>{c}</button>)}
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <input type="date" value={form.date} onChange={e=>setForm({...form, date: e.target.value})} className="p-3 bg-slate-50 rounded-xl text-xs border-none outline-none"/>
+                      <input type="text" placeholder="บันทึก..." value={form.note} onChange={e=>setForm({...form, note: e.target.value})} className="p-3 bg-slate-50 rounded-xl text-xs border-none outline-none"/>
+                    </div>
+                    <button type="submit" className={`w-full py-4 rounded-xl text-white font-bold ${theme.primary} shadow-lg active:scale-95 transition-transform`}>บันทึกรายการ</button>
+                  </form>
+                )}
 
-  const renderAdd = () => (
-    <div className="animate-in fade-in duration-300">
-      <h2 className="text-lg font-bold text-slate-800 mb-4">เพิ่มรายการใหม่</h2>
-      <div className="bg-white rounded-2xl p-5 shadow-sm border border-slate-100">
-        
-        <div className="flex bg-slate-100 rounded-lg p-1 mb-5">
-          <button 
-            onClick={() => setFormData({...formData, type: 'expense', category: ''})}
-            className={`flex-1 py-2 text-sm rounded-md transition-all ${formData.type === 'expense' ? 'bg-white shadow-sm text-rose-500 font-medium' : 'text-slate-500'}`}
-          >
-            รายจ่าย
-          </button>
-          <button 
-            onClick={() => setFormData({...formData, type: 'income', category: ''})}
-            className={`flex-1 py-2 text-sm rounded-md transition-all ${formData.type === 'income' ? 'bg-white shadow-sm text-emerald-500 font-medium' : 'text-slate-500'}`}
-          >
-            รายรับ
-          </button>
-        </div>
+                {tab === 'settings' && (
+                  <div className="space-y-4 animate-in fade-in duration-300">
+                    <div className="bg-white p-4 rounded-xl border">
+                      <p className="text-[10px] font-bold text-slate-400 mb-3 uppercase">ปรับแต่งสี</p>
+                      <div className="flex gap-3">
+                        {Object.values(THEMES).map(t => <button key={t.id} onClick={()=>setTheme(t)} className={`w-10 h-10 rounded-full ${t.primary} ${theme.id === t.id ? 'ring-4 ring-slate-100 scale-110' : 'opacity-40'}`}/>)}
+                      </div>
+                    </div>
+                    <div className="bg-white p-4 rounded-xl border">
+                      <p className="text-[10px] font-bold text-slate-400 mb-3 uppercase">งบประมาณรายเดือน</p>
+                      <input type="number" value={budget} onChange={e=>setBudget(Number(e.target.value))} className="w-full p-2 bg-slate-50 rounded border-none text-sm outline-none"/>
+                    </div>
+                    <div className="bg-white p-4 rounded-xl border">
+                      <p className="text-[10px] font-bold text-slate-400 mb-3 uppercase">จัดการหมวดหมู่</p>
+                      <div className="flex gap-2 mb-4">
+                        <select value={newCat.type} onChange={e=>setNewCat({...newCat, type: e.target.value})} className="text-xs border rounded p-2 bg-white">
+                          <option value="expense">รายจ่าย</option>
+                          <option value="income">รายรับ</option>
+                        </select>
+                        <input type="text" placeholder="ชื่อ..." value={newCat.name} onChange={e=>setNewCat({...newCat, name: e.target.value})} className="flex-1 min-w-0 text-xs border rounded p-2 outline-none"/>
+                        <button onClick={()=>{ if(newCat.name){setCats({...cats, [newCat.type]: [...cats[newCat.type], newCat.name]}); setNewCat({...newCat, name: ''}); }}} className={`${theme.primary} text-white p-2 rounded`}><Icons.Plus size={16}/></button>
+                      </div>
+                      <div className="flex flex-wrap gap-1">
+                        {cats.expense.map(c => <span key={c} className="text-[8px] bg-rose-50 text-rose-500 px-2 py-1 rounded font-bold">{c}</span>)}
+                        {cats.income.map(c => <span key={c} className="text-[8px] bg-emerald-50 text-emerald-500 px-2 py-1 rounded font-bold">{c}</span>)}
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <button onClick={exportCSV} className="p-4 bg-white border rounded-xl flex items-center justify-center gap-2 text-xs font-bold text-slate-600"><Icons.Download/> CSV</button>
+                      <button onClick={()=>window.print()} className="p-4 bg-white border rounded-xl flex items-center justify-center gap-2 text-xs font-bold text-slate-600"><Icons.Copy/> PDF</button>
+                    </div>
+                  </div>
+                )}
+              </main>
 
-        <form onSubmit={handleAddTransaction} className="space-y-4">
-          <div>
-            <label className="block text-xs text-slate-500 mb-1">จำนวนเงิน (บาท)</label>
-            <input 
-              type="number" required min="1" step="0.01"
-              value={formData.amount}
-              onChange={e => setFormData({...formData, amount: e.target.value})}
-              className="w-full text-2xl font-bold bg-slate-50 border-0 rounded-lg p-3 outline-none focus:ring-2 focus:ring-slate-200 transition-all"
-              placeholder="0.00"
-            />
-          </div>
-          
-          <div>
-            <label className="block text-xs text-slate-500 mb-1">หมวดหมู่</label>
-            <div className="grid grid-cols-2 gap-2">
-              {categories[formData.type].map(cat => (
-                <button
-                  key={cat} type="button"
-                  onClick={() => setFormData({...formData, category: cat})}
-                  className={`py-2 px-3 rounded-lg text-sm border text-left truncate transition-all ${formData.category === cat ? `${theme.primary} text-white border-transparent` : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'}`}
-                >
-                  {cat}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs text-slate-500 mb-1">วันที่</label>
-              <input 
-                type="date" required
-                value={formData.date}
-                onChange={e => setFormData({...formData, date: e.target.value})}
-                className="w-full text-sm bg-slate-50 border-0 rounded-lg p-3 outline-none focus:ring-2 focus:ring-slate-200"
-              />
-            </div>
-            <div>
-              <label className="block text-xs text-slate-500 mb-1">บันทึก (ไม่บังคับ)</label>
-              <input 
-                type="text"
-                value={formData.note}
-                onChange={e => setFormData({...formData, note: e.target.value})}
-                className="w-full text-sm bg-slate-50 border-0 rounded-lg p-3 outline-none focus:ring-2 focus:ring-slate-200"
-                placeholder="รายละเอียด..."
-              />
-            </div>
-          </div>
-
-          <button 
-            type="submit" 
-            className={`w-full mt-6 py-3 rounded-xl text-white font-medium shadow-sm transition-opacity hover:opacity-90 ${theme.primary}`}
-          >
-            บันทึกข้อมูล
-          </button>
-        </form>
-      </div>
-    </div>
-  );
-
-  const renderList = () => (
-    <div className="animate-in fade-in duration-300 flex flex-col h-full">
-      <div className="flex justify-between items-center mb-4">
-        <h2 className="text-lg font-bold text-slate-800">รายการเดือนนี้</h2>
-        <input 
-            type="month" 
-            value={filterMonth}
-            onChange={(e) => setFilterMonth(e.target.value)}
-            className="text-sm bg-white border border-slate-200 rounded-lg px-2 py-1 outline-none text-slate-600"
-          />
-      </div>
-
-      <div className="flex-1 overflow-y-auto space-y-3 pb-24 print:pb-0">
-        {filteredTx.length === 0 ? (
-          <div className="text-center text-slate-400 py-10">ไม่มีรายการในเดือนนี้</div>
-        ) : (
-          filteredTx.map(t => (
-            <div key={t.id} className="bg-white p-3 rounded-xl border border-slate-100 shadow-sm flex items-center justify-between group">
-              <div className="flex items-center gap-3 overflow-hidden">
-                <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${t.type === 'income' ? 'bg-emerald-50 text-emerald-500' : 'bg-rose-50 text-rose-500'}`}>
-                  {t.type === 'income' ? '+' : '-'}
+              {/* Bottom Nav */}
+              <nav className="bg-white/80 backdrop-blur-md border-t p-4 flex justify-around items-center fixed bottom-0 left-0 right-0 max-w-md mx-auto print:hidden">
+                <button onClick={()=>setTab('dashboard')} className={tab === 'dashboard' ? theme.text : 'text-slate-300'}><Icons.Home/></button>
+                <button onClick={()=>setTab('list')} className={tab === 'list' ? theme.text : 'text-slate-300'}><Icons.List/></button>
+                <div className="relative -top-8">
+                  <button onClick={()=>setTab('add')} className={`w-14 h-14 rounded-full flex items-center justify-center text-white shadow-2xl ${theme.primary}`}><Icons.Plus/></button>
                 </div>
-                <div className="overflow-hidden">
-                  <p className="text-sm font-semibold text-slate-700 truncate">{t.category}</p>
-                  <p className="text-xs text-slate-400 truncate">{formatDate(t.date)} {t.note && `• ${t.note}`}</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-3 flex-shrink-0">
-                <span className={`font-medium ${t.type === 'income' ? 'text-emerald-500' : 'text-slate-700'}`}>
-                  {t.type === 'income' ? '+' : ''}{formatCurrency(t.amount)}
-                </span>
-                <button onClick={() => confirmDelete(t.id)} className="text-slate-300 hover:text-rose-500 transition-colors p-1 print:hidden">
-                  <Trash2 size={16} />
-                </button>
-              </div>
-            </div>
-          ))
-        )}
-      </div>
-    </div>
-  );
+                <button onClick={()=>setTab('settings')} className={tab === 'settings' ? theme.text : 'text-slate-300'}><Icons.Settings/></button>
+              </nav>
 
-  const renderSett
+              {/* Modal */}
+              {modal && (
+                <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-6 animate-in fade-in duration-200">
+                   <div className="bg-white rounded-2xl p-5 w-full space-y-4">
+                      <div className="flex justify-between font-bold"><span>{modal.title}</span><button onClick={()=>
