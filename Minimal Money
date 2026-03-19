@@ -1,0 +1,486 @@
+import React, { useState, useEffect, useMemo } from 'react';
+import { 
+  Home, 
+  ListOrdered, 
+  PlusCircle, 
+  Settings, 
+  Download, 
+  FileText, 
+  AlertCircle,
+  Trash2,
+  Plus,
+  Copy,
+  X,
+  CheckCircle2
+} from 'lucide-react';
+
+// ==========================================
+// 1. CONFIG & STYLES
+// ==========================================
+
+const THEMES = {
+  blue: { id: 'blue', name: 'Soft Blue', primary: 'bg-blue-500', text: 'text-blue-500', border: 'border-blue-500', bgLight: 'bg-blue-50' },
+  green: { id: 'green', name: 'Matcha', primary: 'bg-emerald-500', text: 'text-emerald-500', border: 'border-emerald-500', bgLight: 'bg-emerald-50' },
+  peach: { id: 'peach', name: 'Peach', primary: 'bg-orange-400', text: 'text-orange-400', border: 'border-orange-400', bgLight: 'bg-orange-50' },
+  slate: { id: 'slate', name: 'Minimal', primary: 'bg-slate-700', text: 'text-slate-700', border: 'border-slate-700', bgLight: 'bg-slate-100' },
+};
+
+const DEFAULT_CATEGORIES = {
+  income: ['เงินเดือน', 'รายได้เสริม', 'โบนัส', 'อื่นๆ'],
+  expense: ['อาหารและเครื่องดื่ม', 'การเดินทาง', 'ของใช้ส่วนตัว', 'บิลและค่าเช่า', 'ช้อปปิ้ง', 'อื่นๆ']
+};
+
+const EXPENSE_COLORS = ['#fb7185', '#f472b6', '#c084fc', '#818cf8', '#38bdf8', '#4ade80', '#facc15', '#fb923c'];
+
+// ==========================================
+// 2. HELPER FUNCTIONS
+// ==========================================
+
+const formatCurrency = (amount) => {
+  return new Intl.NumberFormat('th-TH', { style: 'currency', currency: 'THB' }).format(amount);
+};
+
+const formatDate = (dateString) => {
+  const options = { year: 'numeric', month: 'short', day: 'numeric' };
+  return new Date(dateString).toLocaleDateString('th-TH', options);
+};
+
+const getMonthYear = (dateString) => {
+  const date = new Date(dateString);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+};
+
+// ==========================================
+// 3. UI COMPONENTS
+// ==========================================
+
+const DonutChart = ({ data }) => {
+  if (data.length === 0) return <div className="text-center text-slate-400 py-4 text-sm">ไม่มีข้อมูลรายจ่ายในเดือนนี้</div>;
+  
+  let currentPercentage = 0;
+  const gradientStops = data.map((item, index) => {
+    const start = currentPercentage;
+    const end = currentPercentage + item.percentage;
+    currentPercentage = end;
+    return `${EXPENSE_COLORS[index % EXPENSE_COLORS.length]} ${start}% ${end}%`;
+  });
+
+  return (
+    <div className="flex items-center gap-4 mt-4">
+      <div 
+        className="w-24 h-24 rounded-full flex-shrink-0 relative"
+        style={{ background: `conic-gradient(${gradientStops.join(', ')})` }}
+      >
+        <div className="absolute inset-2 bg-white rounded-full"></div>
+      </div>
+      <div className="flex-1 space-y-2">
+        {data.slice(0, 4).map((item, idx) => (
+          <div key={item.category} className="flex items-center justify-between text-xs">
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full" style={{ backgroundColor: EXPENSE_COLORS[idx % EXPENSE_COLORS.length] }}></span>
+              <span className="text-slate-600 truncate max-w-[80px]">{item.category}</span>
+            </div>
+            <span className="font-medium">{item.percentage.toFixed(0)}%</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+// ==========================================
+// 4. MAIN APPLICATION
+// ==========================================
+
+export default function App() {
+  const [activeTab, setActiveTab] = useState('dashboard');
+  const [transactions, setTransactions] = useState([]);
+  const [categories, setCategories] = useState(DEFAULT_CATEGORIES);
+  const [budget, setBudget] = useState(10000);
+  const [theme, setTheme] = useState(THEMES.blue);
+  const [filterMonth, setFilterMonth] = useState(getMonthYear(new Date()));
+
+  const [formData, setFormData] = useState({
+    type: 'expense',
+    amount: '',
+    category: '',
+    note: '',
+    date: new Date().toISOString().split('T')[0]
+  });
+
+  const [newCat, setNewCat] = useState({ type: 'expense', name: '' });
+  
+  // Custom Modal States แทนการใช้ alert/confirm ของระบบ
+  const [modalConfig, setModalConfig] = useState(null); // { type: 'csv' | 'confirm' | 'alert', title, content, onConfirm, copied }
+
+  useEffect(() => {
+    const savedTx = localStorage.getItem('min_tx');
+    const savedCat = localStorage.getItem('min_cat');
+    const savedBudget = localStorage.getItem('min_budget');
+    const savedTheme = localStorage.getItem('min_theme');
+
+    if (savedTx) setTransactions(JSON.parse(savedTx));
+    if (savedCat) setCategories(JSON.parse(savedCat));
+    if (savedBudget) setBudget(Number(savedBudget));
+    if (savedTheme && THEMES[savedTheme]) setTheme(THEMES[savedTheme]);
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem('min_tx', JSON.stringify(transactions));
+    localStorage.setItem('min_cat', JSON.stringify(categories));
+    localStorage.setItem('min_budget', budget.toString());
+    localStorage.setItem('min_theme', theme.id);
+  }, [transactions, categories, budget, theme]);
+
+  const filteredTx = useMemo(() => {
+    return transactions.filter(t => getMonthYear(t.date) === filterMonth).sort((a, b) => new Date(b.date) - new Date(a.date));
+  }, [transactions, filterMonth]);
+
+  const summary = useMemo(() => {
+    let income = 0, expense = 0;
+    const expByCategory = {};
+
+    filteredTx.forEach(t => {
+      if (t.type === 'income') income += t.amount;
+      else {
+        expense += t.amount;
+        expByCategory[t.category] = (expByCategory[t.category] || 0) + t.amount;
+      }
+    });
+
+    const pieData = Object.keys(expByCategory)
+      .map(cat => ({
+        category: cat,
+        amount: expByCategory[cat],
+        percentage: (expByCategory[cat] / expense) * 100
+      }))
+      .sort((a, b) => b.amount - a.amount);
+
+    return { income, expense, balance: income - expense, pieData };
+  }, [filteredTx]);
+
+  const handleAddTransaction = (e) => {
+    e.preventDefault();
+    if (!formData.amount || !formData.category) return;
+
+    const newTx = {
+      ...formData,
+      id: Date.now().toString(),
+      amount: Number(formData.amount)
+    };
+
+    setTransactions([newTx, ...transactions]);
+    setFormData({ ...formData, amount: '', note: '' });
+    setActiveTab('list');
+  };
+
+  const confirmDelete = (id) => {
+    setModalConfig({
+      type: 'confirm',
+      title: 'ยืนยันการลบ',
+      content: 'คุณแน่ใจหรือไม่ว่าต้องการลบรายการนี้? (ไม่สามารถกู้คืนได้)',
+      onConfirm: () => {
+        setTransactions(transactions.filter(t => t.id !== id));
+        setModalConfig(null);
+      }
+    });
+  };
+
+  const handleAddCategory = () => {
+    if (!newCat.name.trim()) return;
+    if (!categories[newCat.type].includes(newCat.name.trim())) {
+      setCategories(prev => ({
+        ...prev,
+        [newCat.type]: [...prev[newCat.type], newCat.name.trim()]
+      }));
+    }
+    setNewCat({ ...newCat, name: '' });
+  };
+
+  // แก้ไขระบบ Export สำหรับหน้าต่างจำลอง (Preview)
+  const exportCSV = () => {
+    const headers = ['Date,Type,Category,Amount,Note'];
+    const rows = filteredTx.map(t => `${t.date},${t.type === 'income'?'รายรับ':'รายจ่าย'},${t.category},${t.amount},${t.note || '-'}`);
+    const csvContent = headers.concat(rows).join("\n");
+    
+    // แสดง Modal สำหรับคัดลอกแทนการโหลดไฟล์ตรงๆ เนื่องจากติดข้อจำกัด iFrame
+    setModalConfig({
+      type: 'csv',
+      title: 'ส่งออกไฟล์ CSV',
+      content: csvContent,
+      copied: false
+    });
+  };
+
+  const handleCopyCSV = () => {
+    if(!modalConfig) return;
+    const textArea = document.createElement("textarea");
+    textArea.value = modalConfig.content;
+    document.body.appendChild(textArea);
+    textArea.select();
+    try {
+      document.execCommand('copy');
+      setModalConfig(prev => ({ ...prev, copied: true }));
+      setTimeout(() => setModalConfig(prev => prev ? { ...prev, copied: false } : null), 2000);
+    } catch (err) {
+      console.error('Copy failed', err);
+    }
+    document.body.removeChild(textArea);
+  };
+
+  const handlePrintPDF = () => {
+    try {
+      window.print();
+    } catch(e) {
+      // หากถูก Block โดย Browser
+      setModalConfig({
+        type: 'alert',
+        title: 'การพิมพ์ถูกระงับ',
+        content: 'เบราว์เซอร์ของคุณระงับการสั่งพิมพ์อัตโนมัติ กรุณากดปุ่มลัด Ctrl+P (หรือเมนู Share -> Print ในมือถือ) เพื่อเซฟเป็น PDF นะครับ'
+      });
+    }
+  };
+
+  // --- RENDERS ---
+
+  const renderModal = () => {
+    if (!modalConfig) return null;
+
+    return (
+      <div className="fixed inset-0 bg-slate-900/50 z-50 flex items-center justify-center p-4 print:hidden animate-in fade-in duration-200">
+        <div className="bg-white rounded-2xl p-5 w-full max-w-sm shadow-xl animate-in zoom-in-95 duration-200">
+          
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-lg font-bold text-slate-800">{modalConfig.title}</h3>
+            <button onClick={() => setModalConfig(null)} className="text-slate-400 hover:text-slate-600">
+              <X size={20} />
+            </button>
+          </div>
+
+          {modalConfig.type === 'confirm' && (
+            <div>
+              <p className="text-slate-600 text-sm mb-6">{modalConfig.content}</p>
+              <div className="flex gap-3">
+                <button onClick={() => setModalConfig(null)} className="flex-1 py-2 rounded-lg bg-slate-100 text-slate-600 font-medium hover:bg-slate-200">
+                  ยกเลิก
+                </button>
+                <button onClick={modalConfig.onConfirm} className="flex-1 py-2 rounded-lg bg-rose-500 text-white font-medium hover:bg-rose-600">
+                  ลบข้อมูล
+                </button>
+              </div>
+            </div>
+          )}
+
+          {modalConfig.type === 'alert' && (
+            <div>
+              <p className="text-slate-600 text-sm mb-6">{modalConfig.content}</p>
+              <button onClick={() => setModalConfig(null)} className={`w-full py-2 rounded-lg text-white font-medium ${theme.primary}`}>
+                ตกลง
+              </button>
+            </div>
+          )}
+
+          {modalConfig.type === 'csv' && (
+            <div>
+              <p className="text-xs text-slate-500 mb-3">กดคัดลอกข้อมูลด้านล่างไปวางใน Excel (วางแบบคั่นด้วยลูกน้ำ)</p>
+              <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 h-32 overflow-y-auto mb-4 text-xs font-mono text-slate-600 whitespace-pre">
+                {modalConfig.content}
+              </div>
+              <button 
+                onClick={handleCopyCSV} 
+                className={`w-full py-3 rounded-lg text-white font-medium flex items-center justify-center gap-2 transition-all ${modalConfig.copied ? 'bg-emerald-500' : theme.primary}`}
+              >
+                {modalConfig.copied ? <CheckCircle2 size={18} /> : <Copy size={18} />}
+                {modalConfig.copied ? 'คัดลอกเรียบร้อยแล้ว!' : 'คัดลอกข้อมูล CSV'}
+              </button>
+            </div>
+          )}
+
+        </div>
+      </div>
+    );
+  };
+
+  const renderDashboard = () => {
+    const isOverBudget = summary.expense > budget;
+    const isWarning = summary.expense > (budget * 0.8) && !isOverBudget;
+
+    return (
+      <div className="space-y-4 animate-in fade-in duration-300">
+        <div className="flex justify-between items-center mb-2">
+          <h2 className="text-lg font-bold text-slate-800">สรุปประจำเดือน</h2>
+          <input 
+            type="month" 
+            value={filterMonth}
+            onChange={(e) => setFilterMonth(e.target.value)}
+            className="text-sm bg-white border border-slate-200 rounded-lg px-2 py-1 outline-none text-slate-600"
+          />
+        </div>
+
+        <div className={`${theme.primary} rounded-2xl p-5 text-white shadow-md relative overflow-hidden`}>
+          <div className="absolute -right-6 -top-6 w-24 h-24 bg-white opacity-10 rounded-full"></div>
+          <p className="text-sm opacity-90 mb-1">ยอดเงินคงเหลือ</p>
+          <h1 className="text-3xl font-bold tracking-tight">{formatCurrency(summary.balance)}</h1>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div className="bg-white rounded-xl p-4 shadow-sm border border-slate-100 flex flex-col items-center justify-center">
+            <span className="text-xs text-slate-500 mb-1">รายรับ</span>
+            <span className="text-emerald-500 font-semibold">{formatCurrency(summary.income)}</span>
+          </div>
+          <div className="bg-white rounded-xl p-4 shadow-sm border border-slate-100 flex flex-col items-center justify-center">
+            <span className="text-xs text-slate-500 mb-1">รายจ่าย</span>
+            <span className="text-rose-500 font-semibold">{formatCurrency(summary.expense)}</span>
+          </div>
+        </div>
+
+        <div className={`rounded-xl p-4 border ${isOverBudget ? 'bg-rose-50 border-rose-200' : isWarning ? 'bg-orange-50 border-orange-200' : 'bg-white border-slate-100 shadow-sm'}`}>
+          <div className="flex justify-between text-sm mb-2">
+            <span className="text-slate-600 font-medium">งบประมาณรายจ่าย</span>
+            <span className="text-slate-500">{formatCurrency(summary.expense)} / {formatCurrency(budget)}</span>
+          </div>
+          <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+            <div 
+              className={`h-full rounded-full transition-all ${isOverBudget ? 'bg-rose-500' : isWarning ? 'bg-orange-400' : theme.primary}`}
+              style={{ width: `${Math.min((summary.expense / budget) * 100, 100)}%` }}
+            ></div>
+          </div>
+          {(isWarning || isOverBudget) && (
+            <div className={`mt-2 flex items-center gap-1 text-xs ${isOverBudget ? 'text-rose-600' : 'text-orange-600'}`}>
+              <AlertCircle size={14} />
+              <span>{isOverBudget ? 'คุณใช้เงินเกินงบประมาณที่ตั้งไว้แล้ว!' : 'ระวัง! คุณใช้เงินไปแล้วกว่า 80% ของงบ'}</span>
+            </div>
+          )}
+        </div>
+
+        <div className="bg-white rounded-xl p-4 shadow-sm border border-slate-100">
+          <h3 className="text-sm font-semibold text-slate-700 border-b pb-2 mb-2">สัดส่วนรายจ่าย</h3>
+          <DonutChart data={summary.pieData} />
+        </div>
+      </div>
+    );
+  };
+
+  const renderAdd = () => (
+    <div className="animate-in fade-in duration-300">
+      <h2 className="text-lg font-bold text-slate-800 mb-4">เพิ่มรายการใหม่</h2>
+      <div className="bg-white rounded-2xl p-5 shadow-sm border border-slate-100">
+        
+        <div className="flex bg-slate-100 rounded-lg p-1 mb-5">
+          <button 
+            onClick={() => setFormData({...formData, type: 'expense', category: ''})}
+            className={`flex-1 py-2 text-sm rounded-md transition-all ${formData.type === 'expense' ? 'bg-white shadow-sm text-rose-500 font-medium' : 'text-slate-500'}`}
+          >
+            รายจ่าย
+          </button>
+          <button 
+            onClick={() => setFormData({...formData, type: 'income', category: ''})}
+            className={`flex-1 py-2 text-sm rounded-md transition-all ${formData.type === 'income' ? 'bg-white shadow-sm text-emerald-500 font-medium' : 'text-slate-500'}`}
+          >
+            รายรับ
+          </button>
+        </div>
+
+        <form onSubmit={handleAddTransaction} className="space-y-4">
+          <div>
+            <label className="block text-xs text-slate-500 mb-1">จำนวนเงิน (บาท)</label>
+            <input 
+              type="number" required min="1" step="0.01"
+              value={formData.amount}
+              onChange={e => setFormData({...formData, amount: e.target.value})}
+              className="w-full text-2xl font-bold bg-slate-50 border-0 rounded-lg p-3 outline-none focus:ring-2 focus:ring-slate-200 transition-all"
+              placeholder="0.00"
+            />
+          </div>
+          
+          <div>
+            <label className="block text-xs text-slate-500 mb-1">หมวดหมู่</label>
+            <div className="grid grid-cols-2 gap-2">
+              {categories[formData.type].map(cat => (
+                <button
+                  key={cat} type="button"
+                  onClick={() => setFormData({...formData, category: cat})}
+                  className={`py-2 px-3 rounded-lg text-sm border text-left truncate transition-all ${formData.category === cat ? `${theme.primary} text-white border-transparent` : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'}`}
+                >
+                  {cat}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs text-slate-500 mb-1">วันที่</label>
+              <input 
+                type="date" required
+                value={formData.date}
+                onChange={e => setFormData({...formData, date: e.target.value})}
+                className="w-full text-sm bg-slate-50 border-0 rounded-lg p-3 outline-none focus:ring-2 focus:ring-slate-200"
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-slate-500 mb-1">บันทึก (ไม่บังคับ)</label>
+              <input 
+                type="text"
+                value={formData.note}
+                onChange={e => setFormData({...formData, note: e.target.value})}
+                className="w-full text-sm bg-slate-50 border-0 rounded-lg p-3 outline-none focus:ring-2 focus:ring-slate-200"
+                placeholder="รายละเอียด..."
+              />
+            </div>
+          </div>
+
+          <button 
+            type="submit" 
+            className={`w-full mt-6 py-3 rounded-xl text-white font-medium shadow-sm transition-opacity hover:opacity-90 ${theme.primary}`}
+          >
+            บันทึกข้อมูล
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+
+  const renderList = () => (
+    <div className="animate-in fade-in duration-300 flex flex-col h-full">
+      <div className="flex justify-between items-center mb-4">
+        <h2 className="text-lg font-bold text-slate-800">รายการเดือนนี้</h2>
+        <input 
+            type="month" 
+            value={filterMonth}
+            onChange={(e) => setFilterMonth(e.target.value)}
+            className="text-sm bg-white border border-slate-200 rounded-lg px-2 py-1 outline-none text-slate-600"
+          />
+      </div>
+
+      <div className="flex-1 overflow-y-auto space-y-3 pb-24 print:pb-0">
+        {filteredTx.length === 0 ? (
+          <div className="text-center text-slate-400 py-10">ไม่มีรายการในเดือนนี้</div>
+        ) : (
+          filteredTx.map(t => (
+            <div key={t.id} className="bg-white p-3 rounded-xl border border-slate-100 shadow-sm flex items-center justify-between group">
+              <div className="flex items-center gap-3 overflow-hidden">
+                <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${t.type === 'income' ? 'bg-emerald-50 text-emerald-500' : 'bg-rose-50 text-rose-500'}`}>
+                  {t.type === 'income' ? '+' : '-'}
+                </div>
+                <div className="overflow-hidden">
+                  <p className="text-sm font-semibold text-slate-700 truncate">{t.category}</p>
+                  <p className="text-xs text-slate-400 truncate">{formatDate(t.date)} {t.note && `• ${t.note}`}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3 flex-shrink-0">
+                <span className={`font-medium ${t.type === 'income' ? 'text-emerald-500' : 'text-slate-700'}`}>
+                  {t.type === 'income' ? '+' : ''}{formatCurrency(t.amount)}
+                </span>
+                <button onClick={() => confirmDelete(t.id)} className="text-slate-300 hover:text-rose-500 transition-colors p-1 print:hidden">
+                  <Trash2 size={16} />
+                </button>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  );
+
+  const renderSett
