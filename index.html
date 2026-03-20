@@ -62,12 +62,30 @@
 <body class="text-slate-800 antialiased selection:bg-blue-200">
     
     <div id="root" class="app-wrapper">
-        <!-- ระบบป้องกันจอขาว: แสดงหน้านี้จนกว่า React จะโหลดเสร็จ -->
-        <div id="loading-screen" class="flex flex-col items-center justify-center h-full space-y-4">
-            <div class="w-8 h-8 border-4 border-slate-300 border-t-blue-500 rounded-full animate-spin"></div>
+        <!-- หน้าจอโหลด: หากโหลดสำเร็จ React จะลบหน้านี้ทิ้งอัตโนมัติ -->
+        <div id="loading-screen" class="flex flex-col items-center justify-center h-full space-y-5 px-6">
+            <div class="w-10 h-10 border-4 border-slate-200 border-t-blue-500 rounded-full animate-spin"></div>
             <p class="text-sm text-slate-500 font-medium">กำลังโหลดข้อมูล...</p>
         </div>
     </div>
+
+    <!-- สคริปต์ดักจับ Error ป้องกันจอค้าง -->
+    <script>
+        window.onerror = function(msg, url, line) {
+            const loader = document.getElementById('loading-screen');
+            if(loader) {
+                loader.innerHTML = `
+                    <div class="text-center p-6 bg-rose-50 rounded-2xl border border-rose-100">
+                        <p class="text-rose-600 font-bold mb-2">ตรวจพบข้อผิดพลาดจากข้อมูลเก่า</p>
+                        <p class="text-xs text-rose-500 mb-4">ข้อมูลเดิมที่บันทึกไว้ในเครื่องขัดข้อง</p>
+                        <button onclick="localStorage.clear(); location.reload();" class="px-5 py-3 bg-rose-500 text-white text-sm font-bold rounded-xl shadow-md active:scale-95 transition-transform">
+                            รีเซ็ตและล้างข้อมูลเก่าทั้งหมด
+                        </button>
+                    </div>
+                `;
+            }
+        };
+    </script>
 
     <script type="text/babel">
         const { useState, useEffect, useMemo } = React;
@@ -105,9 +123,25 @@
         const getMY = (ds) => new Date(ds).toISOString().substring(0, 7);
         const formatDateText = (ds) => new Date(ds).toLocaleDateString('th-TH', { day: 'numeric', month: 'short' });
 
+        // ฟังก์ชันดึงข้อมูลอย่างปลอดภัย ป้องกันแอปพัง
+        const getSafeCats = () => {
+            try {
+                const stored = JSON.parse(localStorage.getItem('min_cat'));
+                if (stored && Array.isArray(stored.income) && Array.isArray(stored.expense)) return stored;
+                return DEFAULT_CAT;
+            } catch(e) { return DEFAULT_CAT; }
+        };
+
+        const getSafeTx = () => {
+            try {
+                const stored = JSON.parse(localStorage.getItem('min_tx'));
+                return Array.isArray(stored) ? stored : [];
+            } catch(e) { return []; }
+        };
+
         // --- COMPONENTS ---
         const DonutChart = ({ data }) => {
-          if (data.length === 0) return <div className="text-center text-slate-400 py-6 text-xs bg-slate-50 rounded-xl border border-slate-200 border-dashed">ยังไม่มีข้อมูลรายจ่าย</div>;
+          if (!data || data.length === 0) return <div className="text-center text-slate-400 py-6 text-xs bg-slate-50 rounded-xl border border-slate-200 border-dashed">ยังไม่มีข้อมูลรายจ่าย</div>;
           let curr = 0;
           const stops = data.map((it, i) => {
             const s = curr; const e = curr + it.percentage; curr = e;
@@ -139,15 +173,8 @@
         function App() {
           const [tab, setTab] = useState('dashboard');
           
-          // ใช้ try-catch ป้องกันจอขาวกรณี LocalStorage พัง
-          const [tx, setTx] = useState(() => {
-              try { return JSON.parse(localStorage.getItem('min_tx')) || []; } 
-              catch(e) { return []; }
-          });
-          const [cats, setCats] = useState(() => {
-              try { return JSON.parse(localStorage.getItem('min_cat')) || DEFAULT_CAT; } 
-              catch(e) { return DEFAULT_CAT; }
-          });
+          const [tx, setTx] = useState(getSafeTx);
+          const [cats, setCats] = useState(getSafeCats);
           const [budget, setBudget] = useState(() => {
               try { return Number(localStorage.getItem('min_budget')) || 10000; } 
               catch(e) { return 10000; }
@@ -165,24 +192,22 @@
           const [newCat, setNewCat] = useState({ type: 'expense', name: '' });
 
           useEffect(() => {
-            localStorage.setItem('min_tx', JSON.stringify(tx));
-            localStorage.setItem('min_cat', JSON.stringify(cats));
-            localStorage.setItem('min_budget', budget.toString());
-            localStorage.setItem('min_theme', theme.id);
-            
-            // ลบหน้าจอโหลดออกเมื่อ React พร้อมทำงาน
-            const loader = document.getElementById('loading-screen');
-            if(loader) loader.style.display = 'none';
+            try {
+                localStorage.setItem('min_tx', JSON.stringify(tx));
+                localStorage.setItem('min_cat', JSON.stringify(cats));
+                localStorage.setItem('min_budget', budget.toString());
+                localStorage.setItem('min_theme', theme.id);
+            } catch(e) { console.error("Storage save error", e); }
           }, [tx, cats, budget, theme]);
 
-          const filtered = useMemo(() => tx.filter(t => t.date.startsWith(month)).sort((a,b) => new Date(b.date)-new Date(a.date)), [tx, month]);
+          const filtered = useMemo(() => (tx || []).filter(t => t && t.date && t.date.startsWith(month)).sort((a,b) => new Date(b.date)-new Date(a.date)), [tx, month]);
           const summary = useMemo(() => {
             let inc = 0, exp = 0; const byCat = {};
             filtered.forEach(t => {
-              if (t.type === 'income') inc += t.amount;
-              else { exp += t.amount; byCat[t.category] = (byCat[t.category] || 0) + t.amount; }
+              if (t.type === 'income') inc += (t.amount || 0);
+              else { exp += (t.amount || 0); byCat[t.category] = (byCat[t.category] || 0) + (t.amount || 0); }
             });
-            const pie = Object.keys(byCat).map(c => ({ category: c, amount: byCat[c], percentage: (byCat[c]/exp)*100 })).sort((a,b)=>b.amount-a.amount);
+            const pie = Object.keys(byCat).map(c => ({ category: c, amount: byCat[c], percentage: exp > 0 ? (byCat[c]/exp)*100 : 0 })).sort((a,b)=>b.amount-a.amount);
             return { inc, exp, bal: inc - exp, pie };
           }, [filtered]);
 
@@ -245,7 +270,7 @@
                           </p>
                        </div>
                        <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
-                          <div className={`h-full rounded-full transition-all duration-500 ${summary.exp > budget ? 'bg-rose-500' : theme.primary}`} style={{width: `${Math.min((summary.exp/budget)*100, 100)}%`}}></div>
+                          <div className={`h-full rounded-full transition-all duration-500 ${summary.exp > budget ? 'bg-rose-500' : theme.primary}`} style={{width: `${Math.min((budget > 0 ? (summary.exp/budget)*100 : 0), 100)}%`}}></div>
                        </div>
                     </div>
 
@@ -302,19 +327,4 @@
                         <div className="flex bg-slate-100 p-1 rounded-xl">
                            {['income', 'expense'].map(tp => (
                                <button key={tp} type="button" onClick={()=>{
-                                   const fallbackCat = cats[tp] && cats[tp].length > 0 ? cats[tp][0] : '';
-                                   setForm({...form, type: tp, category: fallbackCat});
-                               }} 
-                                className={`flex-1 py-2 text-xs rounded-lg transition-all font-bold ${
-                                    form.type === tp 
-                                    ? (tp === 'income' ? 'bg-white shadow-sm text-emerald-500' : 'bg-white shadow-sm text-rose-500') 
-                                    : 'text-slate-400 hover:text-slate-600'
-                                }`}>
-                                   {tp === 'income' ? 'รายรับ' : 'รายจ่าย'}
-                               </button>
-                           ))}
-                        </div>
-                        
-                        <div className={`text-center py-7 rounded-2xl border transition-all duration-300 ${form.amount ? 'bg-white border-slate-200 shadow-sm' : 'bg-slate-50 border-slate-100'}`}>
-                           <input type="number" step="0.01" required placeholder="0" value={form.amount} onChange={e=>setForm({...form, amount: e.target.value})} 
-                            className={`w-full text-5xl fon
+                                   
